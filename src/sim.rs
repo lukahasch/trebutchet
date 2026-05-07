@@ -20,6 +20,7 @@ where
     pub v: SVector<f64, D>,
     pub l: L,
     pub time_factor: f64,
+    pub time: f64,
     last: Instant,
 }
 
@@ -33,9 +34,16 @@ where
             q,
             v,
             l,
+            time: 0.0,
             time_factor: 1.0,
             last: Instant::now(),
         }
+    }
+
+    pub fn reset_with(&mut self, q: SVector<f64, D>, v: SVector<f64, D>, time: f64) {
+        self.q = q;
+        self.v = v;
+        self.time = time;
     }
 
     pub fn step(&mut self) -> &mut Self {
@@ -48,7 +56,7 @@ where
     pub fn step_dt(&mut self, mut dt: f64) {
         while dt > 0.0 {
             let (q, v) = step_lagrangian::<D, T, _>(dt.min(0.005), self.q, self.v, &self.l);
-
+            self.time += dt.min(0.005);
             if q.as_slice().iter().any(|x| x.is_nan()) || v.as_slice().iter().any(|x| x.is_nan()) {
                 println!(
                     "NAN detected at dt: {dt} | q: {:?}, v: {:?}",
@@ -132,6 +140,11 @@ where
     let next_v = v + (k1_v + k2_v * 2.0 + k3_v * 2.0 + k4_v) * (dt / 6.0);
 
     (next_q, next_v)
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum Torque {
+    Linear { k: f64, initial_disturbance: f64 },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
