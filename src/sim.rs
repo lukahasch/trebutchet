@@ -46,9 +46,12 @@ where
         self.time = time;
     }
 
+    pub fn dt(&self) -> f64 {
+        self.last.elapsed().as_secs_f64() * self.time_factor
+    }
+
     pub fn step(&mut self) -> &mut Self {
-        let dt = self.last.elapsed().as_secs_f64() * self.time_factor;
-        self.step_dt(dt);
+        self.step_dt(self.dt());
         self.last = Instant::now();
         self
     }
