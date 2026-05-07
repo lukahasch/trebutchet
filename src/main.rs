@@ -1,6 +1,11 @@
+use std::panic::catch_unwind;
+
 use eframe::egui::{self, Color32, Slider};
 use egui_plot::{Line, Plot, Points};
-use trebutchet::sim::{Simulation, Trebutchet};
+use trebutchet::{
+    opt::PendulumFit,
+    sim::{Simulation, Trebutchet},
+};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -23,6 +28,8 @@ fn main() -> eframe::Result {
         let mut sim = Simulation::<2, 4, _>::new(position, velocity, trebutchet);
         let mut end_time = 2.0;
         let mut history = Vec::new();
+        let mut cancel = None;
+        let mut receive = None;
 
         eframe::run_ui_native("My egui App", options, move |ui, _frame| {
             let (_, arm2) = trebutchet.carthesian(sim.q);
@@ -50,6 +57,65 @@ fn main() -> eframe::Result {
                 ui.add(
                     Slider::new(&mut trebutchet.projectile_mass, 0.0..=5.0).text("projectile_mass"),
                 );
+                if ui.button("Save").clicked() {
+                    std::thread::spawn(move || match rfd::FileDialog::new().save_file() {
+                        None => {}
+                        Some(file) => {
+                            std::fs::write(
+                                file,
+                                serde_json::to_string_pretty(&trebutchet).unwrap(),
+                            )
+                            .unwrap();
+                        }
+                    });
+                }
+                if ui.button("Open").clicked()
+                    && let Some(file) = rfd::FileDialog::new().pick_file()
+                {
+                    match std::fs::read_to_string(file) {
+                        Ok(s) => match serde_json::from_str(&s) {
+                            Err(e) => eprintln!("{e:?}"),
+                            Ok(treb) => {
+                                trebutchet = treb;
+                            }
+                        },
+                        Err(e) => eprintln!("{e:?}"),
+                    }
+                }
+                if ui.button("opt::square").clicked() {
+                    let (tx, rv) = PendulumFit::square(10.0, 1.6, 0.001, 0.2).optimise(trebutchet);
+                    receive = Some(rv);
+                    cancel = Some(tx);
+                }
+                if ui.button("opt::square (cmaes)").clicked() {
+                    let (tx, rv) =
+                        PendulumFit::square(10.0, 1.6, 0.001, 0.2).optimise_cmaes(trebutchet);
+                    receive = Some(rv);
+                    cancel = Some(tx);
+                }
+                if ui.button("opt::cancel").clicked()
+                    && let Some(tx) = &cancel
+                {
+                    _ = tx.send(());
+                    cancel = None;
+                }
+                if let Some(recv) = &receive {
+                    while let Ok(treb) = recv.try_recv() {
+                        let mut c = sim.clone();
+                        c.l = treb;
+                        if c.panics(end_time) {
+                            continue;
+                        }
+                        let mut c = sim.clone();
+                        c.l = treb;
+                        let (position, velocity) = trebutchet.initial();
+                        c.reset_with(position, velocity, 0.0);
+                        if c.panics(end_time) {
+                            continue;
+                        }
+                        trebutchet = treb;
+                    }
+                }
                 sim.l = trebutchet;
                 sim.step();
                 if sim.time > end_time {

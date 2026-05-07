@@ -1,7 +1,10 @@
 use nalgebra::{Const, DimMin, DimSub, SVector};
 use num_dual::{DualNum, hessian};
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::{
+    panic::{UnwindSafe, catch_unwind},
+    time::Instant,
+};
 
 pub trait Lagrangian<const D: usize> {
     fn lagrangian<T>(&self, q: SVector<T, D>, v: SVector<T, D>) -> T
@@ -12,6 +15,7 @@ pub trait Lagrangian<const D: usize> {
         T: DualNum<f64> + Copy;
 }
 
+#[derive(Clone)]
 pub struct Simulation<const D: usize, const T: usize, L>
 where
     L: Lagrangian<D>,
@@ -40,6 +44,16 @@ where
         }
     }
 
+    pub fn panics(mut self, dt: f64) -> bool
+    where
+        L: UnwindSafe,
+    {
+        match catch_unwind(move || self.step_dt(dt)) {
+            Err(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn reset_with(&mut self, q: SVector<f64, D>, v: SVector<f64, D>, time: f64) {
         self.q = q;
         self.v = v;
@@ -56,22 +70,28 @@ where
         self
     }
 
-    pub fn step_dt(&mut self, mut dt: f64) {
+    pub fn step_dt(&mut self, mut dt: f64) -> bool {
+        if self.q.as_slice().iter().any(|x| x.is_nan())
+            || self.v.as_slice().iter().any(|x| x.is_nan())
+        {
+            return false;
+        }
         while dt > 0.0 {
             let (q, v) = step_lagrangian::<D, T, _>(dt.min(0.005), self.q, self.v, &self.l);
             self.time += dt.min(0.005);
             if q.as_slice().iter().any(|x| x.is_nan()) || v.as_slice().iter().any(|x| x.is_nan()) {
-                println!(
-                    "NAN detected at dt: {dt} | q: {:?}, v: {:?}",
-                    self.q, self.v
-                );
-                break;
+                //println!(
+                //    "NAN detected at dt: {dt} | q: {:?}, v: {:?}",
+                //    self.q, self.v
+                //);
+                return false;
             } else {
                 self.q = q;
                 self.v = v;
             }
             dt -= 0.005;
         }
+        true
     }
 }
 
@@ -163,8 +183,8 @@ pub struct Trebutchet {
 }
 
 impl Trebutchet {
-    pub fn to_f64(&self) -> SVector<f64, 8> {
-        SVector::from([
+    pub fn to_f64(&self) -> [f64; 8] {
+        [
             self.arm_1_length,
             self.arm_2_length,
             self.arm_1_theta_0,
@@ -173,10 +193,10 @@ impl Trebutchet {
             self.arm_1_mass,
             self.arm_2_mass,
             self.projectile_mass,
-        ])
+        ]
     }
 
-    pub fn from_f64(state: SVector<f64, 8>) -> Self {
+    pub fn from_f64(state: &[f64]) -> Self {
         Self {
             arm_1_length: state[0],
             arm_2_length: state[1],

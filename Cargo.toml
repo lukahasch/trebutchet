@@ -10,8 +10,13 @@ egui_plot = "0.35.0"
 nalgebra = { version = "0.34.2", features = ["rand"] }
 num-dual = "0.13.6"
 rand = "0.10.1"
+rfd = "0.17.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 stacker = "0.1.23"
 subsecond = "0.7.7"
+tap = "1.0.1"
 typenum = "1.19.0"
+argmin = { version = "0.11", features = ["full" ] }
+argmin-math = { version = "0.5", features = ["nalgebra_latest", "vec"] }
+cmaes = "0.2"
