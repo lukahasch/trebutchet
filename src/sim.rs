@@ -249,6 +249,7 @@ impl Trebutchet {
         )
     }
 
+    /// wrong cause rot eng
     pub fn kinetic<T>(&self, q: SVector<T, 2>, v: SVector<T, 2>) -> T
     where
         T: DualNum<f64> + Copy,
@@ -321,6 +322,7 @@ impl Lagrangian<2> for Trebutchet {
     where
         T: DualNum<f64> + Copy,
     {
+        //SVector::from([T::from(0.1), T::from(0.0)])
         SVector::zeros()
     }
 }
